@@ -6,29 +6,70 @@ import threading
 from queue import Queue
 import json
 
+def inR(n,low,top):
+    if n < low : return False
+    if n > top : return False
+    return True
+
+
+
 
 def imdisplay(imarray, screen,data, progress = 0):
     clip = data['clip']
     a = pg.surfarray.make_surface(imarray.swapaxes(0,1)) 
     screen.blit(a,(0,0))
 
-
-    pg.draw.rect(screen,pg.Color("red"),(0,clip.size[1],clip.size[0],30))
-        
     scale = clip.size[0] / clip.duration 
+
+    color1 = pg.Color("salmon")
+    color2 = pg.Color("light salmon")
+    longTop = clip.size[1] + 30
+    twenTop = clip.size[1]
+    twenScale = clip.size[0]/20
+
+    pMin = progress - 10
+    pMax = progress + 10
     
-    bartop = clip.size[1]
+
+    if data['mode'] == "jump" :
+        color1 = pg.Color("cyan")
+        color2 = pg.Color("light cyan")
+    elif data['mode'] == "play":
+        color1 = pg.Color("gray")
+        color2 = pg.Color("white")
+
+    pg.draw.rect(screen,pg.Color("black"),(0,twenTop,clip.size[0],60))
+
+    last = 0 
+    incut = False
+    for a in data['marks'] + [clip.duration]:
+        if incut:
+            if inR(a,pMin,pMax)or inR(last,pMin,pMax) or inR(progress,last,a):
+                pg.draw.rect(screen,color1,((last - pMin)*twenScale,twenTop,(a - last)*twenScale,30))
+            pg.draw.rect(screen,color1,(last*scale,longTop,(a-last)*scale,30))
+        else:
+            if inR(a,pMin,pMax)or inR(last,pMin,pMax) or inR(progress,last,a):
+                pg.draw.rect(screen,color2,((last - pMin)*twenScale,twenTop,(a -last)*twenScale,30))
+            pg.draw.rect(screen,color2,(last*scale,longTop,(a-last)*scale,30))
+        last = a 
+        incut = not incut
+        
+    
+    
     l = data['live']
+
     if l >=0 :
         dist = l * scale
-        pg.draw.rect(screen,pg.Color("lime green"),(dist,bartop,4,30))
+        pg.draw.rect(screen,pg.Color("lime green"),(dist,longTop,4,30))
+        if inR(l,pMin,pMax):
+            pg.draw.rect(screen,pg.Color("lime green"),((l - pMin) * twenScale,twenTop,2,30))
+        
 
-    for m in data['marks']:
-        dist = m * scale
-        pg.draw.rect(screen,pg.Color("blue"),(dist,bartop,4,25))
         
     dist = progress * scale
-    pg.draw.rect(screen,pg.Color("black"),(dist,clip.size[1] + 10,4,20))
+    pg.draw.rect(screen,pg.Color("black"),(clip.size[0]/2 - 1,twenTop + 10,2,20))
+    pg.draw.rect(screen,pg.Color("black"),(dist-1,longTop + 10,2,20))
+    
     pg.display.flip()
 
 def vidPreview(clip,marks = None,fname = None):
@@ -44,10 +85,10 @@ def vidPreview(clip,marks = None,fname = None):
     data = { 'clip':clip,
             'live': -1, 
             'marks': marks,
-            'mode':"stop"
+            'mode':"play"
         }
 
-    h = clip.size[1] + 30
+    h = clip.size[1] + 60
 
     screen = pg.display.set_mode((clip.size[0],h))
     
@@ -61,13 +102,19 @@ def vidPreview(clip,marks = None,fname = None):
     t0 = time.time()
     pause = -1
     t = t0
+    pLast = False
 
     def goLoc(nt):
-        nonlocal pause,t0,q
+        nonlocal pause,t,t0,q,pLast
+        if nt < 0:
+            nt = 0
+
+        pLast = False
         if pause >= 0:
             pause = nt
             return
-        t0 = time.time() - nt
+        t = time.time()
+        t0 = t - nt
         q.put(("go",nt))
         
             
@@ -76,16 +123,30 @@ def vidPreview(clip,marks = None,fname = None):
             return pause
         return min(t - t0,clip.duration)
 
-
     while True: 
         t = time.time() 
-        if pause >= 0:
-            img = clip.get_frame(pause)
-            imdisplay(img,screen,data,pause)
-            time.sleep(0.01)
-        elif t0 + clip.duration > t:
-            img = clip.get_frame(t - t0)
-            imdisplay(img,screen,data,t-t0)
+
+        if data['mode'] == "stop" and pLast != False:
+            for m in data['marks']:
+                if m > pLast and m <= prog():
+                    pause = m
+                    q.put("pause") 
+        if data['mode'] == "jump" and pLast != False:
+            nMark = data['marks'][-1]
+            for m in reversed(data['marks']):
+                if m > pLast and m<= prog():
+                    if m == nMark:
+                        pause = m
+                        q.put("pause") 
+                        break
+                    goLoc(nMark)
+                    break
+                nMark = m
+
+        img = clip.get_frame(prog())
+        imdisplay(img,screen,data,prog())
+
+        pLast = prog()
 
         for event in pg.event.get():
             if event.type == pg.KEYDOWN :
@@ -123,10 +184,15 @@ def vidPreview(clip,marks = None,fname = None):
                     if m >= 0 :
                         data['live'] = -1
                         data['marks'].append(m)
+                        data['marks'].sort()
                 elif event.key == pg.K_LEFT:
-                    goLoc(prog() - 0.03)
+                    goLoc(prog() - 0.05)
                 elif event.key == pg.K_RIGHT:
-                    goLoc(prog() + 0.03)
+                    goLoc(prog() + 0.05)
+                elif event.key == pg.K_UP:
+                    goLoc(prog() - 3)
+                elif event.key == pg.K_DOWN:
+                    goLoc(prog() + 3)
                 elif event.key == pg.K_SPACE:
                     if pause >= 0:
                         t0 = time.time() - pause
@@ -135,15 +201,30 @@ def vidPreview(clip,marks = None,fname = None):
                     else:
                         pause =prog()
                         q.put("pause")
+                elif event.key == pg.K_1:
+                    data['mode'] = "play"
+                elif event.key == pg.K_2:
+                    data['mode'] = "stop"
+                elif event.key == pg.K_3:
+                    data['mode'] = "jump"
+
+
             elif event.type == pg.MOUSEBUTTONDOWN:
-                d = clip.duration * pg.mouse.get_pos()[0]/clip.size[0]
-                goLoc(d)
+                mp = pg.mouse.get_pos()
+                if mp[1] < clip.size[1]:
+                    print(mp)
+                elif mp[1] < clip.size[1] + 30:
+                    d = (mp[0]*20/clip.size[0]) - 10
+                    goLoc(prog() + d)
+                else:
+                    d = clip.duration * mp[0]/clip.size[0]
+                    goLoc(d)
                 
 
 
 
 
-def audPreview(clip, fps = 22050, buffersize = 1000,nBytes = 2, q=None):
+def audPreview(clip, fps = 11025, buffersize = 1000,nBytes = 2, q=None):
     if q is None :
         print("No Queueu")
     pg.mixer.quit()
@@ -167,7 +248,7 @@ def audPreview(clip, fps = 22050, buffersize = 1000,nBytes = 2, q=None):
         
             tt =  np.arange(t - t0,t - t0 + fRate*buffersize,fRate)
 
-            snd = clip.to_soundarray(tt,nbytes=nBytes,quantize=True)
+            snd = clip.to_soundarray(tt,fps=fps,nbytes=nBytes,quantize=True)
             chunk = pg.sndarray.make_sound(snd)
 
             if channel is None :
