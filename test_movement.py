@@ -12,4 +12,8 @@ class TestMovement(unittest.TestCase):
         self.assertEqual(f(0),(0,5))
         self.assertEqual(f(5),(2.5,2.5))
         self.assertEqual(f(10),(5,0))
+
+    def test_minus(self):
+        self.assertEqual(mcm.minus((3,-2)),(-3,2))
+
  

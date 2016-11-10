@@ -12,6 +12,30 @@ def inR(n,low,top):
     return True
 
 
+def cutConcat(clip,data,pr=True):
+    """Data can either be a json array or a file which contains it"""
+    if isinstance(data,str) :
+        #doesn't handle file error as this needs to be passed up
+        f = open(data,'r')
+        data = json.load(f)
+        f.close()
+
+    n = len(data)
+    last = 0
+    clips = []
+    for i, c in enumerate(data + [clip.duration]):
+        if i %2 == 0:
+            last = c
+        else :
+            clips.append(clip.subclip(last,c))
+            if pr:
+                print(n - i)
+
+    return mped.concatenate_videoclips(clips)
+
+            
+        
+
 
 
 def imdisplay(imarray, screen,data, progress = 0):

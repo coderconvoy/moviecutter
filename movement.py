@@ -1,5 +1,10 @@
 import math
 
+def minus(a,b=None,fac = 1):
+    if b == None:
+        return tuple(-x * fac for x in a)
+    return tuple((x-y)* fac for x,y in zip(a,b))
+
 def tupaddmult(a,b,fac=1):
     return tuple((x + y)*fac for x,y in zip(a,b))
 
