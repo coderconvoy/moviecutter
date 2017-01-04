@@ -1,5 +1,11 @@
 import time
 import moviepy.editor as mped
+from math import floor
+
+from moviepy.decorators import ( apply_to_mask,
+                                 apply_to_audio,
+                                 outplace)
+
 import numpy as np
 import pygame as pg
 import threading
@@ -11,6 +17,57 @@ def inR(n,low,top):
     if n > top : return False
     return True
 
+def fl_aud(fnc):
+    def resf(t):
+        if isinstance(t,float):
+            return fnc(t)
+        return [fnc(x) for x in t]
+
+    return resf
+
+def cutConcat2(clip,data,sbak=-0.3):
+    """Data can either be a json array or a file which contains it"""
+    if isinstance(data,str) :
+        #doesn't handle file error as this needs to be passed up
+        f = open(data,'r')
+        data = json.load(f)
+        f.close()
+    if len(data) %2 == 1 :
+        data.Append(clip.duration)
+    
+    newDuration = 0;
+    lastp = 0
+    for i,m in enumerate(data):
+        if i %2 == 0 :
+            lastp = m
+        else:
+            newDuration += m - lastp
+
+
+    def offset1(t):
+        last = 0
+        for i,m in enumerate(data):
+            if i %2 ==0:
+                last = m
+            else:
+                if t < m - last:
+                    return t + last
+                t -= (m - last)
+        return 0
+
+    
+    def resf(gf,t):
+        if isinstance(t,np.ndarray):
+            off = offset1(t[0]) - t[0] + sbak
+            mov = np.add(off,t)
+            return gf(mov)
+        return gf(offset1(t))
+
+    
+
+    return clip.fl(resf,apply_to=['mask','audio']).set_duration(newDuration)
+    
+    
 
 def cutConcat(clip,data,pr=True):
     """Data can either be a json array or a file which contains it"""
@@ -96,7 +153,7 @@ def imdisplay(imarray, screen,data, progress = 0):
     
     pg.display.flip()
 
-def vidPreview(clip,marks = None,fname = None):
+def vidPreview(clip,marks = None,fname = None,minafps=4000):
     if marks is None:
         marks = []
         if fname != None:
@@ -120,7 +177,7 @@ def vidPreview(clip,marks = None,fname = None):
     
     #TODO back later and add audio
     if clip.audio is not None:
-        audioThread = threading.Thread(target=audPreview,args=[ clip.audio ] , kwargs={'q':q})
+        audioThread = threading.Thread(target=audPreview,args=[ clip.audio ] , kwargs={'q':q , 'minfps':minafps})
         audioThread.start()
 
     t0 = time.time()
@@ -236,21 +293,23 @@ def vidPreview(clip,marks = None,fname = None):
             elif event.type == pg.MOUSEBUTTONDOWN:
                 mp = pg.mouse.get_pos()
                 if mp[1] < clip.size[1]:
-                    print(mp)
+                    print(prog(),mp)
                 elif mp[1] < clip.size[1] + 30:
                     d = (mp[0]*20/clip.size[0]) - 10
                     goLoc(prog() + d)
+                    print(prog())
                 else:
                     d = clip.duration * mp[0]/clip.size[0]
                     goLoc(d)
+                    print(prog())
                 
 
 
 
 
-def audPreview(clip, fps = 11025, buffersize = 1000,nBytes = 2, q=None):
+def audPreview(clip, fps = 11025, minfps = 4000, buffersize = 1000,nBytes = 2, q=None):
     if q is None :
-        print("No Queueu")
+        print("No Queue")
     pg.mixer.quit()
     pg.mixer.init(fps, -8 * nBytes,clip.nchannels,1024)
 
@@ -260,11 +319,22 @@ def audPreview(clip, fps = 11025, buffersize = 1000,nBytes = 2, q=None):
     channel = None
     fRate = 1.0 / fps
     moved = True
+    hasq = False #moviepy has queue loaded
      
     while True: 
         if moved:
             t = time.time() 
             moved = False
+        elif not hasq :
+            t = time.time()
+            moved = False
+            if fps > minfps :
+                fps = floor(fps * 0.9)
+                print("afps=",fps)
+                pg.mixer.quit()
+                pg.mixer.init(fps, -8 * nBytes, clip.nchannels,1024)
+                moved = True
+                fRate = 1.0 / fps
         else:
             t += fRate*buffersize 
 
@@ -280,8 +350,11 @@ def audPreview(clip, fps = 11025, buffersize = 1000,nBytes = 2, q=None):
             else:
                 channel.queue(chunk)
 
+        hasq = False
         while channel.get_queue():
+            hasq = True
             time.sleep(0.003)
+        
 
         try :
             action = q.get(False)

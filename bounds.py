@@ -24,7 +24,10 @@ def boundClip(clip, bounds,sSize):
     clip = clip.set_pos((-nbounds[0],-nbounds[1]))
     return (scaleF,-nbounds[0],-nbounds[1])
 
-def boundAnimClip(clip,bounds1,bounds2,sSize,time):
+def boundAnimClip(clip,bounds1,bounds2,sSize,time =None):
+    if time== None:
+        time = clip.duration
+    
     def scroll1(getframe,t):
         frac = t/ time
         frame = getframe(t)
