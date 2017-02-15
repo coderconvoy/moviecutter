@@ -27,6 +27,9 @@ def boundClip(clip, bounds,sSize):
 def boundAnimClip(clip,bounds1,bounds2,sSize,time =None):
     if time== None:
         time = clip.duration
+    if time == 0:
+        print("Time set to zero for clip", clip)
+        time = 0.001
     
     def scroll1(getframe,t):
         frac = t/ time
