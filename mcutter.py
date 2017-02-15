@@ -202,7 +202,7 @@ def vidPreview(clip,marks = None,fname = None,minafps=4000):
     def prog():
         if pause >= 0:
             return pause
-        return min(t - t0,clip.duration)
+        return min(t - t0,clip.duration-0.001)
 
     while True: 
         t = time.time() 
