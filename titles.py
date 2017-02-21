@@ -43,7 +43,7 @@ def blueInfo(message,wsize,start=0, cenpos=None, duration = 9,bcol= None,align='
         cenpos = (sx / 2,sy/2)
     px,py = cenpos
     dx = min( px, sx-px)
-    res = mped.TextClip(message, font='Courier-bold',fontsize = dx*2.5/longLine(message),color="blue",method='caption',align=align).set_duration(duration)
+    res = mped.TextClip(message, font='Courier-bold',fontsize = dx*2.5/longLine(message),color="blue",align=align).set_duration(duration)
     rsx,rsy = res.size
 
     if bcol == None:
